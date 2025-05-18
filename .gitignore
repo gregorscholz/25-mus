@@ -7,3 +7,5 @@ v
 .venv
 .vscode/
 .DS_Store
+
+datasets/
