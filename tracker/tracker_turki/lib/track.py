@@ -1,3 +1,5 @@
+import csv
+import os
 import string
 
 import cv2
@@ -5,16 +7,89 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python.saved_model import tag_constants
 
+RADIUS_COLOR = 3
+THRESHOLD_COLOR = 60
+
+ball_colors = {}
+no_colors_tracked = True
+
+def identify_balls(frame, balls):
+    global ball_colors
+    global no_colors_tracked
+
+    if no_colors_tracked:
+        # check for 3 balls in frame
+        i = 0
+        for b in balls:
+            if b["frequency"] < 2:
+                i += 1
+        if i < 3:
+            return balls
+
+    for i, ball in enumerate(balls):
+        if ball["frequency"] >= 2:
+            continue
+
+        colors = []
+        x = ball['centroid'][0]
+        y = ball['centroid'][1]
+
+        for dy in range(-RADIUS_COLOR, RADIUS_COLOR + 1):
+            for dx in range(-RADIUS_COLOR, RADIUS_COLOR + 1):
+                nx, ny = x + dx, y + dy
+                
+                if 0 <= nx < frame.shape[1] and 0 <= ny < frame.shape[0]:
+                    color = frame[int(ny), int(nx)]
+                    colors.append(color)
+
+        if colors:
+            avg_color = np.mean(colors, axis=0)
+        else:
+            continue
+
+        if not no_colors_tracked:
+            avg_color = np.mean(colors, axis=0)
+
+            minID = "d"
+            minDistance = 100000
+
+            # check for fitting color
+            for k, v in ball_colors.items():
+                distance = np.linalg.norm(avg_color - v)
+                if distance < minDistance:
+                    minDistance = distance
+                    minID = k
+
+            if minDistance >= THRESHOLD_COLOR:
+                ball["ID"] = "d"
+                continue
+            ball["ID"] = minID
+        else:
+            bid = string.ascii_lowercase[i]
+            ball["ID"] = bid
+
+            ball_colors[bid] = np.mean(colors, axis=0)
+            i += 1
+
+    no_colors_tracked = False
+    return balls
+
 
 def draw_bbox(image, bound_ball_pair, pair_ball):
     image_h, image_w = image.shape[:2]
 
-    # draw bbox on ball
     for ball in pair_ball:
         if ball["frequency"] >= 2:
             continue
-        cv2.rectangle(image, ball["p1"], ball["p2"], (255, 0, 0), 3)
-        text = "ball " + str(ball["ID"]) + " " + str(ball["state"])
+
+        recColor = (0,0,0)
+        match ball["ID"]:
+            case "a": recColor = (255,0,0)
+            case "b": recColor = (0,255,0)
+            case "c": recColor = (0,0,255)
+
+        cv2.rectangle(image, ball["p1"], ball["p2"], recColor, 3)
+        text = str(ball["ID"])
         cv2.putText(
             image,
             text,
@@ -100,12 +175,13 @@ def track_ball(frame):
         ]
 
         ball = track(frame, pred_bbox)
+        ball = identify_balls(frame, ball)
         frame_with_boxes = draw_bbox(frame, ball, ball)
 
         if frame_with_boxes is None:
             return frame
 
-        return frame_with_boxes
+        return frame_with_boxes, ball
 
 
 saved_model_loaded_ball = tf.saved_model.load(
@@ -114,29 +190,47 @@ saved_model_loaded_ball = tf.saved_model.load(
 infer_ball = saved_model_loaded_ball.signatures["serving_default"]  # type: ignore
 
 
-# cap = cv2.VideoCapture("videos/video1.mp4")
-cap = cv2.VideoCapture(0)
+# cap = cv2.VideoCapture(0)
 
-width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
-height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+print(os.listdir("videos/"))
+for video_name in os.listdir("videos"):
+    if str (video_name).endswith(".mp4"):
+        cap = cv2.VideoCapture(f"videos/{video_name}")
 
-while True:
-    ret, frame = cap.read()
+        width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+        height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
 
-    if not ret:
-        break
+        current_frame_counter = 1
+        ball_colors = {}
+        no_colors_tracked = True
 
-    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    frame = cv2.resize(frame, (int(width), int(height)))
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                print("Video processing complete")
+                break
 
-    frame = track_ball(frame)
+            if not ret:
+                break
 
-    frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frame = cv2.resize(frame, (int(width), int(height)))
 
-    cv2.imshow("Video", frame)
+            frame, balls = track_ball(frame)
 
-    if cv2.waitKey(1) & 0xFF == 27:
-        break
+            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
+            cv2.imshow("Video", frame)
+
+            with open("test.csv", "a", newline='') as fp:
+                writer = csv.writer(fp)
+                for b in balls:
+                        l = [video_name, current_frame_counter, b["centroid"], b["ID"]]
+                        writer.writerow(l)
+            current_frame_counter += 1
+
+            if cv2.waitKey(1) & 0xFF == 27:
+                break
 
 cap.release()
 cv2.destroyAllWindows()
