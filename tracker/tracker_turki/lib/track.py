@@ -12,11 +12,47 @@ THRESHOLD_COLOR = 60
 
 ball_colors = {}
 no_colors_tracked = True
+balls_last_locations = {}
 
 def find_closest_previous_ball_and_update_ball_colors(frame, ball):
     # find closest ball
 
+    # temporary
+    avg_color = get_avg_ball_color(frame, ball)
+
+    if avg_color is None:
+        return ball
+
+    ck = "d"
+    minDistance = 100000
+
+    # check for fitting color
+    for k, v in ball_colors.items():
+        distance = np.linalg.norm(avg_color - v)
+        if distance < minDistance:
+            minDistance = distance
+            ck = k
+
+    dk = "d"
+    minDistance = 100000
+    # check for shortest distance
+    for k, v in balls_last_locations.items():
+        distance = np.linalg.norm(np.array(v) - np.array(ball["centroid"]), axis=0)
+        if distance < minDistance:
+            minDistance = distance
+            dk = k
+
+    # check distance supports fitting color
+    if dk != ck:
+        ball["ID"] = "d"
+        return ball
+    else: ball["ID"] = dk
+
     # update ball_colors
+    weights = [0.95, 0.05]
+    bid = ball["ID"]
+
+    ball_colors[bid] = np.average([ball_colors[bid], avg_color], weights=weights, axis=0)
 
     return ball
 
@@ -26,19 +62,46 @@ def check_balls(frame, balls):
     counter = {"a": 0, "b": 0, "c": 0}
     for ball in balls:
         match ball["ID"]:
-            case "a": counter["a"] += 1
-            case "b": counter["b"] += 1
-            case "c": counter["c"] += 1
-            case "d": ball = find_closest_previous_ball_and_update_ball_colors(frame, ball)
+            case "a": 
+                counter["a"] += 1
+            case "b": 
+                counter["b"] += 1
+            case "c": 
+                counter["c"] += 1
+            case "d": 
+                ball = find_closest_previous_ball_and_update_ball_colors(frame, ball)
+                # update counter
+                if ball['ID'] == "a": counter["a"] += 1
+                elif ball['ID'] == "b": counter["b"] += 1
+                else: counter["b"] += 1
 
     # multiple balls of one color
-    for key, value in counter:
+    for key, value in counter.items():
         if value > 1:
             for ball in balls:
                 if ball['ID'] == key:
                     ball = find_closest_previous_ball_and_update_ball_colors(frame, ball)
 
     return balls
+
+def get_avg_ball_color(frame, ball):
+    colors = []
+    x = ball['centroid'][0]
+    y = ball['centroid'][1]
+
+    for dy in range(-RADIUS_COLOR, RADIUS_COLOR + 1):
+        for dx in range(-RADIUS_COLOR, RADIUS_COLOR + 1):
+            nx, ny = x + dx, y + dy
+            
+            if 0 <= nx < frame.shape[1] and 0 <= ny < frame.shape[0]:
+                color = frame[int(ny), int(nx)]
+                colors.append(color)
+
+    if colors:
+        return np.mean(colors, axis=0) # avg_color
+    else:
+        return None
+
 
 def identify_balls(frame, balls):
     global ball_colors
@@ -50,26 +113,12 @@ def identify_balls(frame, balls):
             return balls
 
     for i, ball in enumerate(balls):
-        colors = []
-        x = ball['centroid'][0]
-        y = ball['centroid'][1]
+        avg_color = get_avg_ball_color(frame, ball)
 
-        for dy in range(-RADIUS_COLOR, RADIUS_COLOR + 1):
-            for dx in range(-RADIUS_COLOR, RADIUS_COLOR + 1):
-                nx, ny = x + dx, y + dy
-                
-                if 0 <= nx < frame.shape[1] and 0 <= ny < frame.shape[0]:
-                    color = frame[int(ny), int(nx)]
-                    colors.append(color)
-
-        if colors:
-            avg_color = np.mean(colors, axis=0)
-        else:
+        if avg_color is None:
             continue
 
         if not no_colors_tracked:
-            avg_color = np.mean(colors, axis=0)
-
             minID = "d"
             minDistance = 100000
 
@@ -88,7 +137,7 @@ def identify_balls(frame, balls):
             bid = string.ascii_lowercase[i]
             ball["ID"] = bid
 
-            ball_colors[bid] = np.mean(colors, axis=0)
+            ball_colors[bid] = avg_color
             i += 1
 
     no_colors_tracked = False
@@ -230,6 +279,10 @@ for video_name in os.listdir("videos"):
             frame = cv2.resize(frame, (int(width), int(height)))
 
             frame, balls = track_balls(frame)
+
+            if not no_colors_tracked:
+                for ball in balls:
+                    balls_last_locations[ball['ID']] = ball['centroid']
 
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
