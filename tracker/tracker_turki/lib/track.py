@@ -13,23 +13,43 @@ THRESHOLD_COLOR = 60
 ball_colors = {}
 no_colors_tracked = True
 
+def find_closest_previous_ball_and_update_ball_colors(frame, ball):
+    # find closest ball
+
+    # update ball_colors
+
+    return ball
+
+
+def check_balls(frame, balls):
+    # check for identification
+    counter = {"a": 0, "b": 0, "c": 0}
+    for ball in balls:
+        match ball["ID"]:
+            case "a": counter["a"] += 1
+            case "b": counter["b"] += 1
+            case "c": counter["c"] += 1
+            case "d": ball = find_closest_previous_ball_and_update_ball_colors(frame, ball)
+
+    # multiple balls of one color
+    for key, value in counter:
+        if value > 1:
+            for ball in balls:
+                if ball['ID'] == key:
+                    ball = find_closest_previous_ball_and_update_ball_colors(frame, ball)
+
+    return balls
+
 def identify_balls(frame, balls):
     global ball_colors
     global no_colors_tracked
 
     if no_colors_tracked:
         # check for 3 balls in frame
-        i = 0
-        for b in balls:
-            if b["frequency"] < 2:
-                i += 1
-        if i < 3:
+        if len(balls) != 3:
             return balls
 
     for i, ball in enumerate(balls):
-        if ball["frequency"] >= 2:
-            continue
-
         colors = []
         x = ball['centroid'][0]
         y = ball['centroid'][1]
@@ -75,13 +95,10 @@ def identify_balls(frame, balls):
     return balls
 
 
-def draw_bbox(image, bound_ball_pair, pair_ball):
+def draw_bbox(image, balls):
     image_h, image_w = image.shape[:2]
 
-    for ball in pair_ball:
-        if ball["frequency"] >= 2:
-            continue
-
+    for ball in balls:
         recColor = (0,0,0)
         match ball["ID"]:
             case "a": recColor = (255,0,0)
@@ -89,10 +106,9 @@ def draw_bbox(image, bound_ball_pair, pair_ball):
             case "c": recColor = (0,0,255)
 
         cv2.rectangle(image, ball["p1"], ball["p2"], recColor, 3)
-        text = str(ball["ID"])
         cv2.putText(
             image,
-            text,
+            "",
             (int(ball["p1"][0]), int(ball["p1"][1]) + 10),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.5,
@@ -133,15 +149,13 @@ def track(frame, bbox):
                 "p2": c2,
                 "distance_level": distance_level,
                 "ID": string.ascii_lowercase[i],
-                "state": "unbound",  # Adding a default state
-                "frequency": 0,
             }
         )
 
     return centroids
 
 
-def track_ball(frame):
+def track_balls(frame):
     image_data = cv2.resize(frame, (416, 416))
     image_data = image_data / 255.0
     image_data = image_data[np.newaxis, ...].astype(np.float32)
@@ -174,14 +188,15 @@ def track_ball(frame):
             valid_detections.numpy(),
         ]
 
-        ball = track(frame, pred_bbox)
-        ball = identify_balls(frame, ball)
-        frame_with_boxes = draw_bbox(frame, ball, ball)
+        balls = track(frame, pred_bbox)
+        balls = identify_balls(frame, balls)
+        balls = check_balls(frame, balls)
+        frame_with_boxes = draw_bbox(frame, balls)
 
         if frame_with_boxes is None:
             return frame
 
-        return frame_with_boxes, ball
+        return frame_with_boxes, balls
 
 
 saved_model_loaded_ball = tf.saved_model.load(
@@ -189,8 +204,6 @@ saved_model_loaded_ball = tf.saved_model.load(
 )
 infer_ball = saved_model_loaded_ball.signatures["serving_default"]  # type: ignore
 
-
-# cap = cv2.VideoCapture(0)
 
 print(os.listdir("videos/"))
 for video_name in os.listdir("videos"):
@@ -216,12 +229,13 @@ for video_name in os.listdir("videos"):
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             frame = cv2.resize(frame, (int(width), int(height)))
 
-            frame, balls = track_ball(frame)
+            frame, balls = track_balls(frame)
 
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
             cv2.imshow("Video", frame)
 
+            # temporary
             with open("test.csv", "a", newline='') as fp:
                 writer = csv.writer(fp)
                 for b in balls:
