@@ -1,11 +1,12 @@
-import csv
-import os
 import string
 
 import cv2
 import numpy as np
 import tensorflow as tf
 from tensorflow.python.saved_model import tag_constants
+
+from exporter import export_to_csv
+from pose import PoseDetector
 
 RADIUS_COLOR = 3
 THRESHOLD_COLOR = 60
@@ -15,11 +16,12 @@ no_colors_tracked = True
 balls_last_known_locations = {}
 balls_locations = {}
 
-def find_closest_previous_ball_and_update_ball_colors(frame, ball):
-    # find closest ball
+
+def _find_closest_previous_ball_and_update_ball_colors(frame, ball):
+    # find the closest ball
 
     # temporary
-    avg_color = get_avg_ball_color(frame, ball)
+    avg_color = _get_avg_ball_color(frame, ball)
 
     if avg_color is None:
         return ball
@@ -49,7 +51,8 @@ def find_closest_previous_ball_and_update_ball_colors(frame, ball):
     if dk != ck:
         ball["ID"] = "d"
         return ball
-    else: ball["ID"] = dk
+    else:
+        ball["ID"] = dk
 
     # update ball_colors
     weights = [0.95, 0.05]
@@ -60,34 +63,38 @@ def find_closest_previous_ball_and_update_ball_colors(frame, ball):
     return ball
 
 
-def check_balls(frame, balls):
+def _check_balls(frame, balls):
     # check for identification
     counter = {"a": 0, "b": 0, "c": 0}
     for ball in balls:
         match ball["ID"]:
-            case "a": 
+            case "a":
                 counter["a"] += 1
-            case "b": 
+            case "b":
                 counter["b"] += 1
-            case "c": 
+            case "c":
                 counter["c"] += 1
-            case "d": 
-                ball = find_closest_previous_ball_and_update_ball_colors(frame, ball)
+            case "d":
+                ball = _find_closest_previous_ball_and_update_ball_colors(frame, ball)
                 # update counter
-                if ball['ID'] == "a": counter["a"] += 1
-                elif ball['ID'] == "b": counter["b"] += 1
-                else: counter["b"] += 1
+                if ball['ID'] == "a":
+                    counter["a"] += 1
+                elif ball['ID'] == "b":
+                    counter["b"] += 1
+                else:
+                    counter["b"] += 1
 
     # multiple balls of one color
     for key, value in counter.items():
         if value > 1:
             for ball in balls:
                 if ball['ID'] == key:
-                    ball = find_closest_previous_ball_and_update_ball_colors(frame, ball)
+                    ball = _find_closest_previous_ball_and_update_ball_colors(frame, ball)
 
     return balls
 
-def get_avg_ball_color(frame, ball):
+
+def _get_avg_ball_color(frame, ball):
     colors = []
     x = ball['centroid'][0]
     y = ball['centroid'][1]
@@ -95,18 +102,18 @@ def get_avg_ball_color(frame, ball):
     for dy in range(-RADIUS_COLOR, RADIUS_COLOR + 1):
         for dx in range(-RADIUS_COLOR, RADIUS_COLOR + 1):
             nx, ny = x + dx, y + dy
-            
+
             if 0 <= nx < frame.shape[1] and 0 <= ny < frame.shape[0]:
                 color = frame[int(ny), int(nx)]
                 colors.append(color)
 
     if colors:
-        return np.mean(colors, axis=0) # avg_color
+        return np.mean(colors, axis=0)  # avg_color
     else:
         return None
 
 
-def identify_balls(frame, balls):
+def _identify_balls(frame, balls):
     global ball_colors
     global no_colors_tracked
 
@@ -116,7 +123,7 @@ def identify_balls(frame, balls):
             return balls
 
     for i, ball in enumerate(balls):
-        avg_color = get_avg_ball_color(frame, ball)
+        avg_color = _get_avg_ball_color(frame, ball)
 
         if avg_color is None:
             continue
@@ -147,15 +154,18 @@ def identify_balls(frame, balls):
     return balls
 
 
-def draw_bbox(image, balls):
+def _draw_bbox(image, balls):
     image_h, image_w = image.shape[:2]
 
     for ball in balls:
-        recColor = (0,0,0)
+        recColor = (0, 0, 0)
         match ball["ID"]:
-            case "a": recColor = (255,0,0)
-            case "b": recColor = (0,255,0)
-            case "c": recColor = (0,0,255)
+            case "a":
+                recColor = (255, 0, 0)
+            case "b":
+                recColor = (0, 255, 0)
+            case "c":
+                recColor = (0, 0, 255)
 
         cv2.rectangle(image, ball["p1"], ball["p2"], recColor, 3)
         cv2.putText(
@@ -171,7 +181,7 @@ def draw_bbox(image, balls):
     return image
 
 
-def track(frame, bbox):
+def _track(frame, bbox):
     centroids = []
     num_classes = 1
     image_h, image_w, _ = frame.shape
@@ -207,7 +217,7 @@ def track(frame, bbox):
     return centroids
 
 
-def track_balls(frame):
+def _track_balls(frame):
     image_data = cv2.resize(frame, (416, 416))
     image_data = image_data / 255.0
     image_data = image_data[np.newaxis, ...].astype(np.float32)
@@ -240,22 +250,23 @@ def track_balls(frame):
             valid_detections.numpy(),
         ]
 
-        balls = track(frame, pred_bbox)
-        balls = identify_balls(frame, balls)
-        balls = check_balls(frame, balls)
-        frame_with_boxes = draw_bbox(frame, balls)
+        balls = _track(frame, pred_bbox)
+        balls = _identify_balls(frame, balls)
+        balls = _check_balls(frame, balls)
+        frame_with_boxes = _draw_bbox(frame, balls)
 
         if frame_with_boxes is None:
             return frame
 
         return frame_with_boxes, balls
+    return None
 
 
-def get_last_coordinates_and_number_of_emptys(list):
+def _get_last_coordinates_and_number_of_emptys(list):
     counter = 0
-    while list[counter+1] == [0,0]:
-        counter +=1
-    return list[counter+1], counter
+    while list[counter + 1] == [0, 0]:
+        counter += 1
+    return list[counter + 1], counter
 
 
 saved_model_loaded_ball = tf.saved_model.load(
@@ -263,89 +274,101 @@ saved_model_loaded_ball = tf.saved_model.load(
 )
 infer_ball = saved_model_loaded_ball.signatures["serving_default"]  # type: ignore
 
+pose_detector = PoseDetector()
 
-print(os.listdir("videos/"))
-for video_name in os.listdir("videos"):
-    if str (video_name).endswith(".mp4"):
-        cap = cv2.VideoCapture(f"videos/{video_name}")
+def track(video_name):
+    cap = cv2.VideoCapture(video_name)
 
-        width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
-        height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+    width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+    height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
 
-        current_frame_counter = 1
-        ball_colors = {}
-        no_colors_tracked = True
-        balls_last_known_locations = {}
-        balls_locations = {}
+    current_frame_counter = 1
+    ball_colors = {}
+    no_colors_tracked = True
+    balls_last_known_locations = {}
+    balls_locations = {}
 
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                print("Video processing complete")
-                break
+    last_frame = 0
+    first_frame = 0
 
-            if not ret:
-                break
+    first_frame_found = False
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            print("Video processing complete")
+            break
 
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame = cv2.resize(frame, (int(width), int(height)))
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frame = cv2.resize(frame, (int(width), int(height)))
 
-            frame, balls = track_balls(frame)
+        # Returns a frame with the pose
+        _ = pose_detector.track(frame)
 
-            if not no_colors_tracked:
-                c = ["a", "b", "c"]
-                for ball in balls:
-                    bid = ball['ID']
-                    if bid == "d":
-                        continue
-                    if bid not in balls_locations:
-                        balls_locations[bid] = []
-                    if bid in c:
-                        balls_locations[bid].append(ball['centroid'])
-                        c.remove(bid)
+        # optional preprocessing
+        # frame_filtered = filter_balls(frame)
+
+        frame, balls = _track_balls(frame)
+
+        if not no_colors_tracked:
+            c = ["a", "b", "c"]
+            for ball in balls:
+                bid = ball['ID']
+                if bid == "d":
+                    continue
+                if bid not in balls_locations:
+                    balls_locations[bid] = []
+                if bid in c:
+                    balls_locations[bid].append(ball['centroid'])
+                    c.remove(bid)
+                else:
+                    balls_locations[bid].pop()
+                    balls_locations[bid].append([0, 0])
+            for i in c:
+                balls_locations[i].append([0, 0])
+
+            # WIP
+            for k, v in balls_locations.items():
+                if k == "a":
+                    if v[-1] != [0, 0]:
+                        print("yey")
+                        if len(v) > 1:
+                            if v[-2] == [0, 0]:
+                                newest_coordinates = v.pop()
+                                last_coordinates, number_of_additions = _get_last_coordinates_and_number_of_emptys(v)
+                                v = v[:-number_of_additions]
+                                distance = np.linalg.norm(np.array(newest_coordinates) - np.array(last_coordinates),
+                                                          axis=0)
+                                one_step = distance / number_of_additions
+                                for s in range(1, number_of_additions):
+                                    v.append(last_coordinates + s * one_step)
+                                v.append(newest_coordinates)
                     else:
-                        balls_locations[bid].pop()
-                        balls_locations[bid].append([0,0])
-                for i in c:
-                    balls_locations[i].append([0,0])
+                        print("noooooooooo")
 
-                # WIP
-                for k, v in balls_locations.items():
-                    if k == "a":
-                        if v[-1] != [0,0]:
-                            print("yey")
-                            if len(v) > 1:
-                                if v[-2] == [0,0]:
-                                    newest_coordinates = v.pop()
-                                    last_coordinates, number_of_additions = get_last_coordinates_and_number_of_emptys(v)
-                                    v = v[:-number_of_additions]
-                                    distance = np.linalg.norm(np.array(newest_coordinates) - np.array(last_coordinates), axis=0)
-                                    one_step = distance/number_of_additions
-                                    for s in range(1,number_of_additions):
-                                        v.append(last_coordinates + s*one_step)
-                                    v.append(newest_coordinates)
-                        else: print("noooooooooo")
+        if not no_colors_tracked:
+            for ball in balls:
+                balls_last_known_locations[ball['ID']] = ball['centroid']
 
-            if not no_colors_tracked:
-                for ball in balls:
-                    balls_last_known_locations[ball['ID']] = ball['centroid']
+        if len(balls) == 3:
+            last_frame = current_frame_counter
 
-            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        if len(balls) == 3 and not first_frame_found:
+            first_frame_found = True
+            first_frame = current_frame_counter
 
-            cv2.imshow("Video", frame)
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
-            # temporary
-            # with open("test.csv", "a", newline='') as fp:
-            #     writer = csv.writer(fp)
-            #     for b in balls:
-            #             l = [video_name, current_frame_counter, b["centroid"], b["ID"]]
-            #             writer.writerow(l)
-            # current_frame_counter += 1
+        cv2.imshow("Video", frame)
 
-            if cv2.waitKey(1) & 0xFF == 27:
-                break
-    print(balls_locations["a"])
+        if cv2.waitKey(1) & 0xFF == 27:
+            break
 
-cap.release()
-cv2.destroyAllWindows()
-cv2.waitKey(1)
+    export_to_csv(last_frame, first_frame, balls_locations, pose_detector.keypoints)
+
+    pose_detector.clear()
+
+    cap.release()
+    cv2.destroyAllWindows()
+    cv2.waitKey(1)
+
+    # print(balls_locations["a"])

@@ -10,3 +10,10 @@ v
 
 datasets/
 *.mp4
+
+
+*.MOV
+*.webm
+*.pt
+
+.idea
