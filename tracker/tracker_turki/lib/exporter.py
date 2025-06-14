@@ -1,6 +1,3 @@
-
-
-
 def export_to_csv(last_frame, first_frame, balls_location, pose_keypoints):
     for i in range(first_frame, last_frame):
         pass

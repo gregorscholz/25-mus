@@ -13,7 +13,6 @@ THRESHOLD_COLOR = 60
 
 ball_colors = {}
 no_colors_tracked = True
-balls_last_known_locations = {}
 balls_locations = {}
 
 
@@ -28,20 +27,18 @@ def _find_closest_previous_ball_and_update_ball_colors(frame, ball):
 
     ck = "d"
     minCDistance = 100000
-    sck = "d"
 
     # check for fitting color
     for k, v in ball_colors.items():
         cDistance = np.linalg.norm(avg_color - v)
         if cDistance < minCDistance:
             minCDistance = cDistance
-            sck = ck
             ck = k
 
     dk = "d"
     minDistance = 100000
     # check for shortest distance
-    for k, v in balls_last_known_locations.items():
+    for k, v in _get_last_known_locations().items():
         distance = np.linalg.norm(np.array(v) - np.array(ball["centroid"]), axis=0)
         if distance < minDistance:
             minDistance = distance
@@ -58,46 +55,38 @@ def _find_closest_previous_ball_and_update_ball_colors(frame, ball):
     weights = [0.95, 0.05]
     bid = ball["ID"]
 
-    ball_colors[bid] = np.average([ball_colors[bid], avg_color], weights=weights, axis=0)
+    ball_colors[bid] = np.average(
+        [ball_colors[bid], avg_color], weights=weights, axis=0
+    )
 
     return ball
 
 
 def _check_balls(frame, balls):
-    # check for identification
-    counter = {"a": 0, "b": 0, "c": 0}
     for ball in balls:
-        match ball["ID"]:
-            case "a":
-                counter["a"] += 1
-            case "b":
-                counter["b"] += 1
-            case "c":
-                counter["c"] += 1
-            case "d":
-                ball = _find_closest_previous_ball_and_update_ball_colors(frame, ball)
-                # update counter
-                if ball['ID'] == "a":
-                    counter["a"] += 1
-                elif ball['ID'] == "b":
-                    counter["b"] += 1
-                else:
-                    counter["b"] += 1
+        if ball["ID"] == "d":
+            ball = _find_closest_previous_ball_and_update_ball_colors(frame, ball)
+
+    counter = _count_tracked_ball_ids(balls)
 
     # multiple balls of one color
     for key, value in counter.items():
+        if key == "d":
+            continue
         if value > 1:
             for ball in balls:
-                if ball['ID'] == key:
-                    ball = _find_closest_previous_ball_and_update_ball_colors(frame, ball)
+                if ball["ID"] == key:
+                    ball = _find_closest_previous_ball_and_update_ball_colors(
+                        frame, ball
+                    )
 
     return balls
 
 
 def _get_avg_ball_color(frame, ball):
     colors = []
-    x = ball['centroid'][0]
-    y = ball['centroid'][1]
+    x = ball["centroid"][0]
+    y = ball["centroid"][1]
 
     for dy in range(-RADIUS_COLOR, RADIUS_COLOR + 1):
         for dx in range(-RADIUS_COLOR, RADIUS_COLOR + 1):
@@ -262,18 +251,96 @@ def _track_balls(frame):
     return None
 
 
-def _get_last_coordinates_and_number_of_emptys(list):
-    counter = 0
-    while list[counter + 1] == [0, 0]:
-        counter += 1
-    return list[counter + 1], counter
+def _get_last_known_locations() -> dict:
+    locations = {}
+    for k, v in balls_locations.items():
+        for location in reversed(v):
+            if location != [0, 0]:
+                locations[k] = location
+                break
+    return locations
+
+
+def _interpolate_missing_locations():
+    # WIP
+    for k, v in balls_locations.items():
+        if v[-1] != [0, 0]:
+            if len(v) > 1:
+                if v[-2] == [0, 0]:
+                    newest_location = v.pop()
+                    counter = 0
+                    last_location = [0,0]
+                    for location in reversed(v):
+                        if location != [0,0]:
+                            last_coordinates = location
+                        else:
+                            counter += 1
+
+                    # check if last location was found
+                    if last_location == [0,0]:
+                        # no interpolation possible
+                        # add newest location again
+                        v.append(newest_location)
+                        break
+
+                    v = v[:-counter]
+
+                    # distance = np.linalg.norm(
+                    #     np.array(newest_coordinates) - np.array(last_coordinates),
+                    #     axis=0,
+                    # )
+                    # one_step = distance / number_of_additions
+                    # for s in range(1, number_of_additions):
+                    #     v.append(last_coordinates + s * one_step)
+
+                    # add newest location again
+                    v.append(newest_location)
+
+
+def _save_locations(balls):
+    c = ["a", "b", "c"]
+    if not no_colors_tracked:
+        for ball in balls:
+            bid = ball["ID"]
+            if bid == "d":
+                continue
+            if bid not in balls_locations:
+                balls_locations[bid] = []
+            if bid in c:
+                balls_locations[bid].append(ball["centroid"])
+                c.remove(bid)
+            else:
+                balls_locations[bid].pop()
+                balls_locations[bid].append([0, 0])
+
+    # add [0,0] for balls not tracked in that frame
+    for i in c:
+        if i not in balls_locations:
+            balls_locations[i] = []
+        balls_locations[i].append([0, 0])
+
+    # _interpolate_missing_locations()
+
+
+def _count_tracked_ball_ids(balls) -> dict:
+    counter = {"a": 0, "b": 0, "c": 0, "d": 0}
+    for ball in balls:
+        match ball["ID"]:
+            case "a":
+                counter["a"] += 1
+            case "b":
+                counter["b"] += 1
+            case "c":
+                counter["c"] += 1
+            case _:
+                counter["d"] += 1
+    return counter
 
 
 saved_model_loaded_ball = tf.saved_model.load(
     "ball_weights", tags=[tag_constants.SERVING]
 )
 infer_ball = saved_model_loaded_ball.signatures["serving_default"]  # type: ignore
-
 
 
 def track(video_name, pose_model):
@@ -284,16 +351,18 @@ def track(video_name, pose_model):
     width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
     height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
 
-    current_frame_counter = 1
-    ball_colors = {}
-    no_colors_tracked = True
-    balls_last_known_locations = {}
+    global balls_locations
+    global current_frame_counter
+    global no_colors_tracked
+
     balls_locations = {}
+    current_frame_counter = 1
+    no_colors_tracked = True
 
     last_frame = 0
     first_frame = 0
-
     first_frame_found = False
+
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -311,52 +380,23 @@ def track(video_name, pose_model):
 
         frame, balls = _track_balls(frame)
 
-        if not no_colors_tracked:
-            c = ["a", "b", "c"]
-            for ball in balls:
-                bid = ball['ID']
-                if bid == "d":
-                    continue
-                if bid not in balls_locations:
-                    balls_locations[bid] = []
-                if bid in c:
-                    balls_locations[bid].append(ball['centroid'])
-                    c.remove(bid)
-                else:
-                    balls_locations[bid].pop()
-                    balls_locations[bid].append([0, 0])
-            for i in c:
-                balls_locations[i].append([0, 0])
-
-            # WIP
-            for k, v in balls_locations.items():
-                if k == "a":
-                    if v[-1] != [0, 0]:
-                        print("yey")
-                        if len(v) > 1:
-                            if v[-2] == [0, 0]:
-                                newest_coordinates = v.pop()
-                                last_coordinates, number_of_additions = _get_last_coordinates_and_number_of_emptys(v)
-                                v = v[:-number_of_additions]
-                                distance = np.linalg.norm(np.array(newest_coordinates) - np.array(last_coordinates),
-                                                          axis=0)
-                                one_step = distance / number_of_additions
-                                for s in range(1, number_of_additions):
-                                    v.append(last_coordinates + s * one_step)
-                                v.append(newest_coordinates)
-                    else:
-                        print("noooooooooo")
+        _save_locations(balls)
 
         if not no_colors_tracked:
-            for ball in balls:
-                balls_last_known_locations[ball['ID']] = ball['centroid']
+            # check for multiple balls of one color
+            counter = _count_tracked_ball_ids(balls)
 
-        if len(balls) == 3:
-            last_frame = current_frame_counter
+            ball_counter = 0
+            for key, value in counter.items():
+                if value == 1:
+                    ball_counter += 1
 
-        if len(balls) == 3 and not first_frame_found:
-            first_frame_found = True
-            first_frame = current_frame_counter
+            if ball_counter == 3:
+                last_frame = current_frame_counter
+
+            if ball_counter == 3 and not first_frame_found:
+                first_frame_found = True
+                first_frame = current_frame_counter
 
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
@@ -371,4 +411,4 @@ def track(video_name, pose_model):
     cv2.destroyAllWindows()
     cv2.waitKey(1)
 
-    # print(balls_locations["a"])
+    print(balls_locations["a"])

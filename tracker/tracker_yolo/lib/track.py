@@ -10,7 +10,6 @@ def detect(frame):
 
 
 def highlight(frame, results):
-
     for r in results:
         print(r.boxes)
 

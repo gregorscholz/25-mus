@@ -22,13 +22,15 @@ RED2 = [
     np.array([179, 255, 255], np.uint8),
 ]
 
+
 def filter_balls(frame):
     masks = []
-    for color in  [YELLOW, BLUE, RED1, RED2]:
+    for color in [YELLOW, BLUE, RED1, RED2]:
         masks.append(_filter_color(frame, color))
 
     mask = reduce(cv2.bitwise_or, masks)
     return cv2.bitwise_not(mask)
+
 
 def _filter_color(frame, color):
     blur = cv2.GaussianBlur(frame, (0, 0), 3)

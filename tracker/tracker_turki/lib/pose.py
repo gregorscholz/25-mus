@@ -1,9 +1,7 @@
 import numpy as np
-from ultralytics import YOLO
 
 
 class PoseDetector:
-
     def __init__(self, model):
         self.model = model
         self.keypoints = []

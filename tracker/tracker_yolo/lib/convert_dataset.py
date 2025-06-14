@@ -42,7 +42,6 @@ width = 10
 height = 10
 
 for annotation in annotations:
-
     for row in csv.reader(open(f"{PATH}/annotations/{annotation}")):
         data = {k: v for k, v in zip(KEY_NAMES, row) if v != ""}
         filename = data["filename"].replace(".png", ".txt")
@@ -61,7 +60,6 @@ for annotation in annotations:
         # create labels
 
         with open(f"{PATH}/labels/{category}/{filename}", "w") as file:
-
             if "rhx" in data and "rhy" in data:
                 line = f"0 {normalize(data['rhx'])} {normalize(data['rhy'])} {normalize(width)} {normalize(height)}\n"
                 file.write(line)
@@ -71,7 +69,7 @@ for annotation in annotations:
                 file.write(line)
 
             if "b1x" in data and "b1y" in data:
-                line = f"2 {normalize(data['b1x'])} {normalize( data['b1y'])} {normalize(width)} {normalize(height)}\n"
+                line = f"2 {normalize(data['b1x'])} {normalize(data['b1y'])} {normalize(width)} {normalize(height)}\n"
                 file.write(line)
 
             if "b2x" in data and "b2y" in data:
