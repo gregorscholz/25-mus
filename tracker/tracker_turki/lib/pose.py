@@ -11,12 +11,12 @@ class PoseDetector:
         frame, pose = result.plot(boxes=False), result.keypoints.xy[0]
 
         filtered_keypoints = {
-            "leftShoulder": pose[5].tolist(),
-            "rightShoulder": pose[6].tolist(),
-            "leftElbow": pose[7].tolist(),
-            "rightElbow": pose[8].tolist(),
-            "leftHand": pose[9].tolist(),
-            "rightHand": pose[10].tolist(),
+            "left_shoulder": pose[5].tolist(),
+            "right_shoulder": pose[6].tolist(),
+            "left_elbow": pose[7].tolist(),
+            "right_elbow": pose[8].tolist(),
+            "left_hand": pose[9].tolist(),
+            "right_hand": pose[10].tolist(),
         }
 
         self.keypoints.append(filtered_keypoints)

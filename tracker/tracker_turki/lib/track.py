@@ -270,16 +270,16 @@ def _interpolate_missing_locations():
                 if v[-2] == [0, 0]:
                     newest_location = v.pop()
                     counter = 0
-                    last_location = [0,0]
+                    last_location = [0, 0]
                     for location in reversed(v):
-                        if location != [0,0]:
+                        if location != [0, 0]:
                             last_location = location
                             break
                         else:
                             counter += 1
 
                     # check if last location was found
-                    if last_location == [0,0]:
+                    if last_location == [0, 0]:
                         # no interpolation possible
                         # add newest location again
                         v.append(newest_location)
@@ -287,7 +287,7 @@ def _interpolate_missing_locations():
 
                     if k == "a":
                         print(counter)
-                        print(v[-(counter+1):])
+                        print(v[-(counter + 1) :])
                     # for i in range(0,counter):
                     #     temp = v.pop()
                     #     if k == "a":
@@ -295,7 +295,7 @@ def _interpolate_missing_locations():
                     v = v[:-counter]
                     if k == "a":
                         print("danach")
-                        print(v[-(counter+1):])
+                        print(v[-(counter + 1) :])
 
                     # distance = np.linalg.norm(
                     #     np.array(newest_coordinates) - np.array(last_coordinates),
@@ -332,7 +332,7 @@ def _save_locations(balls):
             balls_locations[i] = []
         balls_locations[i].append([0, 0])
 
-    _interpolate_missing_locations()
+    # _interpolate_missing_locations()
 
 
 def _count_tracked_ball_ids(balls) -> dict:
@@ -365,7 +365,7 @@ def track(video_name, pose_model):
     height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
 
     global balls_locations
-    global current_frame_counter
+    current_frame_counter = 0
     global no_colors_tracked
 
     balls_locations = {}
@@ -386,7 +386,7 @@ def track(video_name, pose_model):
         frame = cv2.resize(frame, (int(width), int(height)))
 
         # Returns a frame with the pose
-        # _ = pose_detector.track(frame)
+        _ = pose_detector.track(frame)
 
         # optional preprocessing
         # frame_filtered = filter_balls(frame)
@@ -418,7 +418,11 @@ def track(video_name, pose_model):
         if cv2.waitKey(1) & 0xFF == 27:
             break
 
-    export_to_csv(last_frame, first_frame, balls_locations, pose_detector.keypoints)
+        current_frame_counter += 1
+
+    export_to_csv(
+        video_name, last_frame, first_frame, balls_locations, pose_detector.keypoints
+    )
 
     cap.release()
     cv2.destroyAllWindows()
