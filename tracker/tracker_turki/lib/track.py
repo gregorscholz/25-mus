@@ -264,6 +264,7 @@ def _get_last_known_locations() -> dict:
 def _interpolate_missing_locations():
     # WIP
     for k, v in balls_locations.items():
+        print(v[-2:])
         if v[-1] != [0, 0]:
             if len(v) > 1:
                 if v[-2] == [0, 0]:
@@ -272,7 +273,8 @@ def _interpolate_missing_locations():
                     last_location = [0,0]
                     for location in reversed(v):
                         if location != [0,0]:
-                            last_coordinates = location
+                            last_location = location
+                            break
                         else:
                             counter += 1
 
@@ -283,7 +285,17 @@ def _interpolate_missing_locations():
                         v.append(newest_location)
                         break
 
+                    if k == "a":
+                        print(counter)
+                        print(v[-(counter+1):])
+                    # for i in range(0,counter):
+                    #     temp = v.pop()
+                    #     if k == "a":
+                    #         print(f"removed: {temp}")
                     v = v[:-counter]
+                    if k == "a":
+                        print("danach")
+                        print(v[-(counter+1):])
 
                     # distance = np.linalg.norm(
                     #     np.array(newest_coordinates) - np.array(last_coordinates),
@@ -295,6 +307,7 @@ def _interpolate_missing_locations():
 
                     # add newest location again
                     v.append(newest_location)
+        print(v[-2:])
 
 
 def _save_locations(balls):
@@ -319,7 +332,7 @@ def _save_locations(balls):
             balls_locations[i] = []
         balls_locations[i].append([0, 0])
 
-    # _interpolate_missing_locations()
+    _interpolate_missing_locations()
 
 
 def _count_tracked_ball_ids(balls) -> dict:
@@ -373,7 +386,7 @@ def track(video_name, pose_model):
         frame = cv2.resize(frame, (int(width), int(height)))
 
         # Returns a frame with the pose
-        _ = pose_detector.track(frame)
+        # _ = pose_detector.track(frame)
 
         # optional preprocessing
         # frame_filtered = filter_balls(frame)
