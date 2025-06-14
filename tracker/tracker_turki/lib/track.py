@@ -12,7 +12,8 @@ THRESHOLD_COLOR = 60
 
 ball_colors = {}
 no_colors_tracked = True
-balls_last_locations = {}
+balls_last_known_locations = {}
+balls_locations = {}
 
 def find_closest_previous_ball_and_update_ball_colors(frame, ball):
     # find closest ball
@@ -24,19 +25,21 @@ def find_closest_previous_ball_and_update_ball_colors(frame, ball):
         return ball
 
     ck = "d"
-    minDistance = 100000
+    minCDistance = 100000
+    sck = "d"
 
     # check for fitting color
     for k, v in ball_colors.items():
-        distance = np.linalg.norm(avg_color - v)
-        if distance < minDistance:
-            minDistance = distance
+        cDistance = np.linalg.norm(avg_color - v)
+        if cDistance < minCDistance:
+            minCDistance = cDistance
+            sck = ck
             ck = k
 
     dk = "d"
     minDistance = 100000
     # check for shortest distance
-    for k, v in balls_last_locations.items():
+    for k, v in balls_last_known_locations.items():
         distance = np.linalg.norm(np.array(v) - np.array(ball["centroid"]), axis=0)
         if distance < minDistance:
             minDistance = distance
@@ -248,6 +251,13 @@ def track_balls(frame):
         return frame_with_boxes, balls
 
 
+def get_last_coordinates_and_number_of_emptys(list):
+    counter = 0
+    while list[counter+1] == [0,0]:
+        counter +=1
+    return list[counter+1], counter
+
+
 saved_model_loaded_ball = tf.saved_model.load(
     "ball_weights", tags=[tag_constants.SERVING]
 )
@@ -265,6 +275,8 @@ for video_name in os.listdir("videos"):
         current_frame_counter = 1
         ball_colors = {}
         no_colors_tracked = True
+        balls_last_known_locations = {}
+        balls_locations = {}
 
         while True:
             ret, frame = cap.read()
@@ -281,23 +293,58 @@ for video_name in os.listdir("videos"):
             frame, balls = track_balls(frame)
 
             if not no_colors_tracked:
+                c = ["a", "b", "c"]
                 for ball in balls:
-                    balls_last_locations[ball['ID']] = ball['centroid']
+                    bid = ball['ID']
+                    if bid == "d":
+                        continue
+                    if bid not in balls_locations:
+                        balls_locations[bid] = []
+                    if bid in c:
+                        balls_locations[bid].append(ball['centroid'])
+                        c.remove(bid)
+                    else:
+                        balls_locations[bid].pop()
+                        balls_locations[bid].append([0,0])
+                for i in c:
+                    balls_locations[i].append([0,0])
+
+                # WIP
+                for k, v in balls_locations.items():
+                    if k == "a":
+                        if v[-1] != [0,0]:
+                            print("yey")
+                            if len(v) > 1:
+                                if v[-2] == [0,0]:
+                                    newest_coordinates = v.pop()
+                                    last_coordinates, number_of_additions = get_last_coordinates_and_number_of_emptys(v)
+                                    v = v[:-number_of_additions]
+                                    distance = np.linalg.norm(np.array(newest_coordinates) - np.array(last_coordinates), axis=0)
+                                    one_step = distance/number_of_additions
+                                    for s in range(1,number_of_additions):
+                                        v.append(last_coordinates + s*one_step)
+                                    v.append(newest_coordinates)
+                        else: print("noooooooooo")
+
+            if not no_colors_tracked:
+                for ball in balls:
+                    balls_last_known_locations[ball['ID']] = ball['centroid']
 
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
             cv2.imshow("Video", frame)
 
             # temporary
-            with open("test.csv", "a", newline='') as fp:
-                writer = csv.writer(fp)
-                for b in balls:
-                        l = [video_name, current_frame_counter, b["centroid"], b["ID"]]
-                        writer.writerow(l)
-            current_frame_counter += 1
+            # with open("test.csv", "a", newline='') as fp:
+            #     writer = csv.writer(fp)
+            #     for b in balls:
+            #             l = [video_name, current_frame_counter, b["centroid"], b["ID"]]
+            #             writer.writerow(l)
+            # current_frame_counter += 1
 
             if cv2.waitKey(1) & 0xFF == 27:
                 break
+    print(balls_locations["a"])
 
 cap.release()
 cv2.destroyAllWindows()
