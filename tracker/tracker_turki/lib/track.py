@@ -274,9 +274,11 @@ saved_model_loaded_ball = tf.saved_model.load(
 )
 infer_ball = saved_model_loaded_ball.signatures["serving_default"]  # type: ignore
 
-pose_detector = PoseDetector()
 
-def track(video_name):
+
+def track(video_name, pose_model):
+    pose_detector = PoseDetector(pose_model)
+
     cap = cv2.VideoCapture(video_name)
 
     width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
@@ -364,8 +366,6 @@ def track(video_name):
             break
 
     export_to_csv(last_frame, first_frame, balls_locations, pose_detector.keypoints)
-
-    pose_detector.clear()
 
     cap.release()
     cv2.destroyAllWindows()

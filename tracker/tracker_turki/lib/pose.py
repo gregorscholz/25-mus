@@ -4,8 +4,8 @@ from ultralytics import YOLO
 
 class PoseDetector:
 
-    def __init__(self):
-        self.model = YOLO("yolo11n-pose.pt")
+    def __init__(self, model):
+        self.model = model
         self.keypoints = []
 
     def track(self, frame):
@@ -24,11 +24,6 @@ class PoseDetector:
         self.keypoints.append(filtered_keypoints)
 
         return frame
-
-    def clear(self):
-        self.keypoints.clear()
-
-
 
     def angle(self, shoulder, elbow, wrist):
         a = np.array(shoulder)
