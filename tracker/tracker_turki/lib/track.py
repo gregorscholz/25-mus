@@ -7,6 +7,7 @@ from tensorflow.python.saved_model import tag_constants
 
 from exporter import export_to_csv
 from pose import PoseDetector
+from normalise import normalize, format_lists
 
 RADIUS_COLOR = 3
 THRESHOLD_COLOR = 60
@@ -341,7 +342,7 @@ def _save_locations(balls):
             balls_locations[i] = []
         balls_locations[i].append([0, 0])
 
-    # _interpolate_missing_locations()
+    _interpolate_missing_locations()
 
 
 def _count_tracked_ball_ids(balls) -> dict:
@@ -428,9 +429,18 @@ def track(video_name, pose_model):
 
         current_frame_counter += 1
 
-    export_to_csv(
-        video_name, last_frame, first_frame, balls_locations, pose_detector.keypoints
+    coords = format_lists(
+        last_frame,
+        first_frame,
+        balls_locations,
+        pose_detector.keypoints,
     )
+
+    # 0 to normalize on x, 1 to normalize on y
+    coords = normalize(coords, 0)
+    coords = normalize(coords, 1)
+
+    export_to_csv(video_name, coords)
 
     cap.release()
     cv2.destroyAllWindows()
