@@ -278,34 +278,42 @@ def _interpolate_missing_locations():
         newest_location = v.pop()
 
         counter = 0
-        last_location = [0,0]
+        last_location = [0, 0]
 
         # try to find second to last known location
         for location in reversed(v):
-            if location != [0,0]:
+            if location != [0, 0]:
                 last_location = location
                 break
             else:
                 counter += 1
 
         # check if last location was found
-        if last_location == [0,0]:
+        if last_location == [0, 0]:
             # no interpolation possible
             # add newest location again
             v.append(newest_location)
             break
 
         # remove unknown locations
-        for i in range(0,counter):
+        for i in range(0, counter):
             v.pop()
         # v = v[:-counter] # something doesnt work with it :(
 
-        distance = [(newest_location[0] - last_location[0]), (newest_location[1] - last_location[1])]
-        one_step = [(distance[0] / (counter+1)), (distance[1] / (counter+1))]
+        distance = [
+            (newest_location[0] - last_location[0]),
+            (newest_location[1] - last_location[1]),
+        ]
+        one_step = [(distance[0] / (counter + 1)), (distance[1] / (counter + 1))]
 
         # add interpolated locations
-        for i in range(0,counter):
-            v.append([(last_location[0] + ((i+1)*one_step[0])), (last_location[1] + ((i+1)*one_step[1]))])
+        for i in range(0, counter):
+            v.append(
+                [
+                    (last_location[0] + ((i + 1) * one_step[0])),
+                    (last_location[1] + ((i + 1) * one_step[1])),
+                ]
+            )
 
         # add newest location again
         v.append(newest_location)

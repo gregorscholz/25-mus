@@ -1,14 +1,13 @@
 import csv
 import os
 
-CSV_FILE_PATH ="out.csv"
+CSV_FILE_PATH = "out.csv"
+
 
 def export_to_csv(video_name, last_frame, first_frame, balls_location, pose_keypoints):
-
     contains_header = False
     if os.path.exists(CSV_FILE_PATH) and os.path.getsize(CSV_FILE_PATH) != 0:
-            contains_header = True
-
+        contains_header = True
 
     with open(CSV_FILE_PATH, "a", newline="") as csvfile:
         writer = csv.writer(csvfile)
