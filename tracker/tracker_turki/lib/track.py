@@ -6,6 +6,7 @@ import tensorflow as tf
 from tensorflow.python.saved_model import tag_constants
 
 from exporter import export_to_csv
+from interpolator import interpolate
 from pose import PoseDetector
 from normalise import normalize, format_lists
 
@@ -145,6 +146,15 @@ def _identify_balls(frame, balls):
 
 
 def _draw_bbox(image, balls):
+    counter = _count_tracked_ball_ids(balls)
+    ball_counter = 0
+    for key, value in counter.items():
+        if value == 1 and key != "d":
+            ball_counter += 1
+
+    if ball_counter != 3:
+        return image
+
     image_h, image_w = image.shape[:2]
 
     for ball in balls:
@@ -156,6 +166,9 @@ def _draw_bbox(image, balls):
                 recColor = (0, 255, 0)
             case "c":
                 recColor = (0, 0, 255)
+            case "d":
+                # if 4 or more balls where tracked
+                continue
 
         cv2.rectangle(image, ball["p1"], ball["p2"], recColor, 3)
         cv2.putText(
@@ -262,64 +275,6 @@ def _get_last_known_locations() -> dict:
     return locations
 
 
-def _interpolate_missing_locations():
-    for _, v in balls_locations.items():
-        if v[-1] == [0, 0]:
-            # last location unknown
-            continue
-        if len(v) == 1:
-            # location in first frame
-            break
-
-        if v[-2] != [0, 0]:
-            # second to last location known
-            continue
-
-        # remove newest locations
-        newest_location = v.pop()
-
-        counter = 0
-        last_location = [0, 0]
-
-        # try to find second to last known location
-        for location in reversed(v):
-            if location != [0, 0]:
-                last_location = location
-                break
-            else:
-                counter += 1
-
-        # check if last location was found
-        if last_location == [0, 0]:
-            # no interpolation possible
-            # add newest location again
-            v.append(newest_location)
-            break
-
-        # remove unknown locations
-        for i in range(0, counter):
-            v.pop()
-        # v = v[:-counter] # something doesnt work with it :(
-
-        distance = [
-            (newest_location[0] - last_location[0]),
-            (newest_location[1] - last_location[1]),
-        ]
-        one_step = [(distance[0] / (counter + 1)), (distance[1] / (counter + 1))]
-
-        # add interpolated locations
-        for i in range(0, counter):
-            v.append(
-                [
-                    (last_location[0] + ((i + 1) * one_step[0])),
-                    (last_location[1] + ((i + 1) * one_step[1])),
-                ]
-            )
-
-        # add newest location again
-        v.append(newest_location)
-
-
 def _save_locations(balls):
     c = ["a", "b", "c"]
     if not no_colors_tracked:
@@ -341,8 +296,6 @@ def _save_locations(balls):
         if i not in balls_locations:
             balls_locations[i] = []
         balls_locations[i].append([0, 0])
-
-    _interpolate_missing_locations()
 
 
 def _count_tracked_ball_ids(balls) -> dict:
@@ -410,7 +363,7 @@ def track(video_name, pose_model):
 
             ball_counter = 0
             for key, value in counter.items():
-                if value == 1:
+                if value == 1 and key != "d":
                     ball_counter += 1
 
             if ball_counter == 3:
@@ -429,6 +382,8 @@ def track(video_name, pose_model):
 
         current_frame_counter += 1
 
+    balls_locations = interpolate(balls_locations, first_frame, last_frame)
+
     coords = format_lists(
         last_frame,
         first_frame,
@@ -445,5 +400,3 @@ def track(video_name, pose_model):
     cap.release()
     cv2.destroyAllWindows()
     cv2.waitKey(1)
-
-    print(balls_locations["a"])
