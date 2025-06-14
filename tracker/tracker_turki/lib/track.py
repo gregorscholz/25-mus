@@ -262,52 +262,53 @@ def _get_last_known_locations() -> dict:
 
 
 def _interpolate_missing_locations():
-    # WIP
-    for k, v in balls_locations.items():
-        print(v[-2:])
-        if v[-1] != [0, 0]:
-            if len(v) > 1:
-                if v[-2] == [0, 0]:
-                    newest_location = v.pop()
-                    counter = 0
-                    last_location = [0, 0]
-                    for location in reversed(v):
-                        if location != [0, 0]:
-                            last_location = location
-                            break
-                        else:
-                            counter += 1
+    for _, v in balls_locations.items():
+        if v[-1] == [0, 0]:
+            # last location unknown
+            continue
+        if len(v) == 1:
+            # location in first frame
+            break
 
-                    # check if last location was found
-                    if last_location == [0, 0]:
-                        # no interpolation possible
-                        # add newest location again
-                        v.append(newest_location)
-                        break
+        if v[-2] != [0, 0]:
+            # second to last location known
+            continue
 
-                    if k == "a":
-                        print(counter)
-                        print(v[-(counter + 1) :])
-                    # for i in range(0,counter):
-                    #     temp = v.pop()
-                    #     if k == "a":
-                    #         print(f"removed: {temp}")
-                    v = v[:-counter]
-                    if k == "a":
-                        print("danach")
-                        print(v[-(counter + 1) :])
+        # remove newest locations
+        newest_location = v.pop()
 
-                    # distance = np.linalg.norm(
-                    #     np.array(newest_coordinates) - np.array(last_coordinates),
-                    #     axis=0,
-                    # )
-                    # one_step = distance / number_of_additions
-                    # for s in range(1, number_of_additions):
-                    #     v.append(last_coordinates + s * one_step)
+        counter = 0
+        last_location = [0,0]
 
-                    # add newest location again
-                    v.append(newest_location)
-        print(v[-2:])
+        # try to find second to last known location
+        for location in reversed(v):
+            if location != [0,0]:
+                last_location = location
+                break
+            else:
+                counter += 1
+
+        # check if last location was found
+        if last_location == [0,0]:
+            # no interpolation possible
+            # add newest location again
+            v.append(newest_location)
+            break
+
+        # remove unknown locations
+        for i in range(0,counter):
+            v.pop()
+        # v = v[:-counter] # something doesnt work with it :(
+
+        distance = [(newest_location[0] - last_location[0]), (newest_location[1] - last_location[1])]
+        one_step = [(distance[0] / (counter+1)), (distance[1] / (counter+1))]
+
+        # add interpolated locations
+        for i in range(0,counter):
+            v.append([(last_location[0] + ((i+1)*one_step[0])), (last_location[1] + ((i+1)*one_step[1]))])
+
+        # add newest location again
+        v.append(newest_location)
 
 
 def _save_locations(balls):
@@ -365,11 +366,10 @@ def track(video_name, pose_model):
     height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
 
     global balls_locations
-    current_frame_counter = 0
     global no_colors_tracked
 
     balls_locations = {}
-    current_frame_counter = 1
+    current_frame_counter = 0
     no_colors_tracked = True
 
     last_frame = 0
