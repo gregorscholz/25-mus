@@ -1,7 +1,7 @@
 import numpy as np
 
 
-DEVIATION_TOLERANCE = 1.5
+DEVIATION_TOLERANCE = 1.9
 
 
 def _calculate_distances(locations):

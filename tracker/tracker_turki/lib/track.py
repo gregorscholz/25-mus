@@ -20,8 +20,6 @@ balls_locations = {}
 
 def _find_closest_previous_ball_and_update_ball_colors(frame, ball):
     # find the closest ball
-
-    # temporary
     avg_color = _get_avg_ball_color(frame, ball)
 
     if avg_color is None:
@@ -39,9 +37,15 @@ def _find_closest_previous_ball_and_update_ball_colors(frame, ball):
 
     dk = "d"
     minDistance = 100000
+    weights_distance = [2.0, 0.7]
+
     # check for shortest distance
     for k, v in _get_last_known_locations().items():
-        distance = np.linalg.norm(np.array(v) - np.array(ball["centroid"]), axis=0)
+        # distance = np.linalg.norm(np.array(v) - np.array(ball["centroid"]), axis=0)
+        distance = np.sqrt(
+            weights_distance[0] * (v[0] - ball["centroid"][0]) ** 2
+            + weights_distance[1] * (v[1] - ball["centroid"][1]) ** 2
+        )
         if distance < minDistance:
             minDistance = distance
             dk = k
@@ -54,11 +58,11 @@ def _find_closest_previous_ball_and_update_ball_colors(frame, ball):
         ball["ID"] = dk
 
     # update ball_colors
-    weights = [0.95, 0.05]
+    weights_color_change = [0.95, 0.05]
     bid = ball["ID"]
 
     ball_colors[bid] = np.average(
-        [ball_colors[bid], avg_color], weights=weights, axis=0
+        [ball_colors[bid], avg_color], weights=weights_color_change, axis=0
     )
 
     return ball
@@ -338,6 +342,9 @@ def track(video_name, pose_model):
     first_frame = 0
     first_frame_found = False
 
+    #  debug
+    # good_frames = 0
+
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -351,7 +358,8 @@ def track(video_name, pose_model):
         _ = pose_detector.track(frame)
 
         # optional preprocessing
-        # frame_filtered = filter_balls(frame)
+        # mask = filter_balls(frame)
+        # fame[mask == 255] = [255, 255, 255]
 
         frame, balls = _track_balls(frame)
 
@@ -367,6 +375,7 @@ def track(video_name, pose_model):
                     ball_counter += 1
 
             if ball_counter == 3:
+                # good_frames += 1 # debug
                 last_frame = current_frame_counter
 
             if ball_counter == 3 and not first_frame_found:
@@ -382,20 +391,26 @@ def track(video_name, pose_model):
 
         current_frame_counter += 1
 
-    balls_locations = interpolate(balls_locations, first_frame, last_frame)
+    # debug
+    # print(good_frames)
 
-    coords = format_lists(
-        last_frame,
-        first_frame,
-        balls_locations,
-        pose_detector.keypoints,
-    )
+    try:
+        balls_locations = interpolate(balls_locations, first_frame, last_frame)
+    except Exception:
+        print(f"Video '{video_name}' disqualified")
+    else:
+        coords = format_lists(
+            last_frame,
+            first_frame,
+            balls_locations,
+            pose_detector.keypoints,
+        )
 
-    # 0 to normalize on x, 1 to normalize on y
-    coords = normalize(coords, 0)
-    coords = normalize(coords, 1)
+        # 0 to normalize on x, 1 to normalize on y
+        coords = normalize(coords, 0)
+        coords = normalize(coords, 1)
 
-    export_to_csv(video_name, coords)
+        export_to_csv(video_name, coords)
 
     cap.release()
     cv2.destroyAllWindows()
