@@ -6,6 +6,10 @@ from track import track
 
 pose_model = YOLO("yolo11n-pose.pt")
 
+# single video
+# track(f"videos/ia1-1.mp4", pose_model)
+
+# all videos
 for video_name in os.listdir("videos"):
     if not str(video_name).endswith(".mp4"):
         continue
