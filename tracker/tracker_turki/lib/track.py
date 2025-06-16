@@ -9,6 +9,7 @@ from exporter import export_to_csv
 from interpolator import interpolate
 from pose import PoseDetector
 from normalise import normalize, format_lists
+# from preprocessor import filter_balls
 
 RADIUS_COLOR = 3
 THRESHOLD_COLOR = 60
@@ -359,7 +360,7 @@ def track(video_name, pose_model):
 
         # optional preprocessing
         # mask = filter_balls(frame)
-        # fame[mask == 255] = [255, 255, 255]
+        # frame[mask == 255] = [255, 255, 255]
 
         frame, balls = _track_balls(frame)
 
@@ -408,7 +409,7 @@ def track(video_name, pose_model):
 
         # 0 to normalize on x, 1 to normalize on y
         coords = normalize(coords, 0)
-        coords = normalize(coords, 1)
+        # coords = normalize(coords, 1)
 
         export_to_csv(video_name, coords)
 
