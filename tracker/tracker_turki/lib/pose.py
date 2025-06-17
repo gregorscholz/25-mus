@@ -7,7 +7,7 @@ class PoseDetector:
         self.keypoints = []
 
     def track(self, frame):
-        result = self.model.predict(frame)[0]
+        result = self.model.predict(frame, verbose=False)[0]
         frame, pose = result.plot(boxes=False), result.keypoints.xy[0]
 
         filtered_keypoints = {

@@ -14,6 +14,7 @@ def _calculate_distances(locations):
 
 
 def _remove_aberrations(locations):
+    # just an idea
     distances = _calculate_distances(locations)
     avg_distance = np.average(distances)
 
@@ -76,7 +77,6 @@ def _interpolate_missing_locations(locations):
 
 def interpolate(balls_locations, first_frame, last_frame):
     for k, locations in balls_locations.items():
-        print(k)
         first_frames = locations[: (first_frame + 1)]
         last_frames = locations[(last_frame + 1) :]
         locations = locations[(first_frame + 1) : (last_frame + 1)]
@@ -85,10 +85,8 @@ def interpolate(balls_locations, first_frame, last_frame):
         locations = _interpolate_missing_locations(locations)
 
         # remove aberration
-        locations = _remove_aberrations(locations)
+        # locations = _remove_aberrations(locations)
+        # locations = _interpolate_missing_locations(locations)
 
-        # interpolate missing locations
-        locations = _interpolate_missing_locations(locations)
-
-        locations = first_frames + locations + last_frames
+        balls_locations[k] = first_frames + locations + last_frames
     return balls_locations
