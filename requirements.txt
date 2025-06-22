@@ -40,3 +40,4 @@ wrapt==1.17.2
 ultralytics~=8.3.133
 pandas~=2.2.3
 matplotlib~=3.10.3
+scikit-learn~=1.7.0
