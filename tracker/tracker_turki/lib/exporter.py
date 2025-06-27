@@ -13,11 +13,16 @@ def export_to_csv(video_name, coords):
         writer = csv.writer(csvfile)
 
         if not contains_header:
-            writer.writerow(["video", "balls", "hands", "elbows", "shoulders"])
+            writer.writerow(["video", "ball_a", "ball_b", "ball_c", "hand_left", "hand_right", "elbow_left", "elbow_right", "shoulder_left", "shoulder_right"])
 
-        balls = [coords["ball_a"], coords["ball_b"], coords["ball_c"]]
-        hands = [coords["left_hand"], coords["right_hand"]]
-        elbows = [coords["left_elbow"], coords["right_elbow"]]
-        shoulders = [coords["left_shoulder"], coords["right_shoulder"]]
+        ball_a = coords["ball_a"]
+        ball_b = coords["ball_b"]
+        ball_c = coords["ball_c"]
+        hand_left = coords["left_hand"]
+        hand_right = coords["right_hand"]
+        elbow_left = coords["left_elbow"]
+        elbow_right = coords["right_elbow"]
+        shoulder_left = coords["left_shoulder"]
+        shoulder_right = coords["right_shoulder"]
 
-        writer.writerow([video_name, balls, hands, elbows, shoulders])
+        writer.writerow([video_name, ball_a, ball_b, ball_c, hand_left, hand_right, elbow_left, elbow_right, shoulder_left, shoulder_right])
